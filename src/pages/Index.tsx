@@ -161,7 +161,26 @@ export default function Index() {
     setAddedItems((prev) => prev.filter((i) => i.id !== id));
   };
 
+  const handleDownloadJar = () => {
+    const blob = new Blob([generatedCode], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "CustomMod.java";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleExport = () => {
+    const items = addedItems.map((i) => `  - ${i.name} (${i.emoji})`).join("\n");
+    const content = `# ${editorMod.name}\n# Версия: ${editorMod.version}\n# ${editorMod.description}\n# Урон: ${editorMod.properties.damage}, Прочность: ${editorMod.properties.durability}\n\nЭлементы мода:\n${items || "  (пусто)"}`;
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${editorMod.name.replace(/\s+/g, "_")}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -410,9 +429,9 @@ export default function Index() {
 
               {generatedCode && !isGenerating && (
                 <div className="px-5 py-3 border-t border-mc-border flex gap-2">
-                  <button className="flex-1 bg-mc-green/20 border border-mc-green/40 text-mc-green-bright text-sm font-semibold py-2 rounded-lg hover:bg-mc-green/30 transition-all flex items-center justify-center gap-1.5">
+                  <button onClick={handleDownloadJar} className="flex-1 bg-mc-green/20 border border-mc-green/40 text-mc-green-bright text-sm font-semibold py-2 rounded-lg hover:bg-mc-green/30 transition-all flex items-center justify-center gap-1.5">
                     <Icon name="Download" size={14} />
-                    Скачать .jar
+                    Скачать .java
                   </button>
                   <button
                     onClick={() => setTab("editor")}
