@@ -162,11 +162,111 @@ export default function Index() {
   };
 
   const handleDownloadJar = () => {
-    const blob = new Blob([generatedCode], { type: "text/plain" });
+    // Build a minimal valid ZIP (JAR) file in-browser
+    const encoder = new TextEncoder();
+
+    const addFile = (name: string, content: Uint8Array): { local: Uint8Array; central: Uint8Array; offset: number } => {
+      const nameBytes = encoder.encode(name);
+      const crc = crc32(content);
+      const size = content.length;
+
+      // Local file header
+      const local = new Uint8Array(30 + nameBytes.length + size);
+      const lv = new DataView(local.buffer);
+      lv.setUint32(0, 0x04034b50, true); // signature
+      lv.setUint16(4, 20, true);          // version needed
+      lv.setUint16(6, 0, true);           // flags
+      lv.setUint16(8, 0, true);           // compression (stored)
+      lv.setUint16(10, 0, true);          // mod time
+      lv.setUint16(12, 0, true);          // mod date
+      lv.setUint32(14, crc, true);        // crc32
+      lv.setUint32(18, size, true);       // compressed size
+      lv.setUint32(22, size, true);       // uncompressed size
+      lv.setUint16(26, nameBytes.length, true);
+      lv.setUint16(28, 0, true);
+      local.set(nameBytes, 30);
+      local.set(content, 30 + nameBytes.length);
+
+      // Central directory entry
+      const central = new Uint8Array(46 + nameBytes.length);
+      const cv = new DataView(central.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0, true);
+      cv.setUint16(10, 0, true);
+      cv.setUint16(12, 0, true);
+      cv.setUint16(14, 0, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, size, true);
+      cv.setUint32(24, size, true);
+      cv.setUint16(28, nameBytes.length, true);
+      cv.setUint16(30, 0, true);
+      cv.setUint16(32, 0, true);
+      cv.setUint16(34, 0, true);
+      cv.setUint16(36, 0, true);
+      cv.setUint32(38, 0, true);
+      cv.setUint32(42, 0, true); // offset filled outside
+      central.set(nameBytes, 46);
+
+      return { local, central, offset: 0 };
+    };
+
+    const crc32 = (data: Uint8Array): number => {
+      const table = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let j = 0; j < 8; j++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        table[i] = c;
+      }
+      let crc = 0xffffffff;
+      for (const b of data) crc = table[(crc ^ b) & 0xff] ^ (crc >>> 8);
+      return (crc ^ 0xffffffff) >>> 0;
+    };
+
+    const modName = prompt.trim().slice(0, 30).replace(/[^a-zA-Zа-яА-Я0-9]/g, "") || "CustomMod";
+    const javaFileName = `com/modforge/${modName}.java`;
+    const manifestContent = `Manifest-Version: 1.0\nMain-Class: com.modforge.${modName}\nCreated-By: ModForge AI\n`;
+
+    const javaBytes = encoder.encode(generatedCode);
+    const manifestBytes = encoder.encode(manifestContent);
+
+    const file1 = addFile(javaFileName, javaBytes);
+    const file2 = addFile("META-INF/MANIFEST.MF", manifestBytes);
+
+    // Set offsets
+    const offset1 = 0;
+    const offset2 = file1.local.length;
+    new DataView(file2.central.buffer).setUint32(42, offset2, true);
+    new DataView(file1.central.buffer).setUint32(42, offset1, true);
+
+    const centralOffset = file1.local.length + file2.local.length;
+    const centralSize = file1.central.length + file2.central.length;
+
+    // End of central directory
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(4, 0, true);
+    ev.setUint16(6, 0, true);
+    ev.setUint16(8, 2, true); // 2 entries
+    ev.setUint16(10, 2, true);
+    ev.setUint32(12, centralSize, true);
+    ev.setUint32(16, centralOffset, true);
+    ev.setUint16(20, 0, true);
+
+    const jar = new Uint8Array(centralOffset + centralSize + eocd.length);
+    jar.set(file1.local, 0);
+    jar.set(file2.local, offset2);
+    jar.set(file1.central, centralOffset);
+    jar.set(file2.central, centralOffset + file1.central.length);
+    jar.set(eocd, centralOffset + centralSize);
+
+    const blob = new Blob([jar], { type: "application/java-archive" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "CustomMod.java";
+    a.download = `${modName}.jar`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -431,7 +531,7 @@ export default function Index() {
                 <div className="px-5 py-3 border-t border-mc-border flex gap-2">
                   <button onClick={handleDownloadJar} className="flex-1 bg-mc-green/20 border border-mc-green/40 text-mc-green-bright text-sm font-semibold py-2 rounded-lg hover:bg-mc-green/30 transition-all flex items-center justify-center gap-1.5">
                     <Icon name="Download" size={14} />
-                    Скачать .java
+                    Скачать .jar
                   </button>
                   <button
                     onClick={() => setTab("editor")}
