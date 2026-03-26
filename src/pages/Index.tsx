@@ -77,6 +77,64 @@ interface ModItem {
   category: string;
 }
 
+interface ItemSettings {
+  customName: string;
+  color: string;
+  glowColor: string;
+  texture: string;
+  material: string;
+  rarity: string;
+  glowing: boolean;
+  fireproof: boolean;
+  stackable: boolean;
+  maxStack: number;
+  damage: number;
+  durability: number;
+  effects: string[];
+}
+
+const DEFAULT_ITEM_SETTINGS: ItemSettings = {
+  customName: "",
+  color: "#4ade80",
+  glowColor: "#4ade80",
+  texture: "smooth",
+  material: "iron",
+  rarity: "common",
+  glowing: false,
+  fireproof: false,
+  stackable: true,
+  maxStack: 64,
+  damage: 5,
+  durability: 500,
+  effects: [],
+};
+
+const TEXTURES = [
+  { id: "smooth", label: "Гладкая", preview: "▪" },
+  { id: "rough", label: "Шероховатая", preview: "▩" },
+  { id: "metallic", label: "Металл", preview: "◈" },
+  { id: "crystal", label: "Кристалл", preview: "◇" },
+  { id: "wood", label: "Дерево", preview: "▦" },
+  { id: "obsidian", label: "Обсидиан", preview: "◼" },
+];
+
+const MATERIALS = ["iron", "gold", "diamond", "obsidian", "wood", "stone", "netherite"];
+const MATERIAL_LABELS: Record<string, string> = {
+  iron: "Железо", gold: "Золото", diamond: "Алмаз",
+  obsidian: "Обсидиан", wood: "Дерево", stone: "Камень", netherite: "Незерит",
+};
+const RARITIES = [
+  { id: "common", label: "Обычный", color: "text-mc-text" },
+  { id: "uncommon", label: "Необычный", color: "text-mc-green-bright" },
+  { id: "rare", label: "Редкий", color: "text-mc-blue" },
+  { id: "epic", label: "Эпический", color: "text-purple-400" },
+  { id: "legendary", label: "Легендарный", color: "text-mc-amber" },
+];
+const EFFECTS_LIST = [
+  "Горение", "Замедление", "Отравление", "Слабость",
+  "Сила", "Скорость", "Регенерация", "Невидимость",
+];
+
 interface EditorMod {
   name: string;
   description: string;
@@ -104,8 +162,33 @@ export default function Index() {
     properties: { damage: 5, durability: 500, speed: 1 },
   });
   const [addedItems, setAddedItems] = useState<ModItem[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [itemSettings, setItemSettings] = useState<Record<string, ItemSettings>>({});
   const [showSuccess, setShowSuccess] = useState(false);
   const codeRef = useRef<HTMLPreElement>(null);
+
+  const selectedItem = addedItems.find((i) => i.id === selectedItemId) ?? null;
+  const currentSettings: ItemSettings = selectedItemId
+    ? (itemSettings[selectedItemId] ?? { ...DEFAULT_ITEM_SETTINGS, customName: selectedItem?.name ?? "" })
+    : DEFAULT_ITEM_SETTINGS;
+
+  const updateSetting = <K extends keyof ItemSettings>(key: K, value: ItemSettings[K]) => {
+    if (!selectedItemId) return;
+    setItemSettings((prev) => ({
+      ...prev,
+      [selectedItemId]: {
+        ...(prev[selectedItemId] ?? { ...DEFAULT_ITEM_SETTINGS, customName: selectedItem?.name ?? "" }),
+        [key]: value,
+      },
+    }));
+  };
+
+  const toggleEffect = (effect: string) => {
+    if (!selectedItemId) return;
+    const cur = currentSettings.effects;
+    const next = cur.includes(effect) ? cur.filter((e) => e !== effect) : [...cur, effect];
+    updateSetting("effects", next);
+  };
 
   useEffect(() => {
     if (tab !== "home") return;
@@ -154,11 +237,15 @@ export default function Index() {
   const addItemToMod = (item: ModItem) => {
     if (!addedItems.find((i) => i.id === item.id)) {
       setAddedItems((prev) => [...prev, item]);
+      setSelectedItemId(item.id);
+    } else {
+      setSelectedItemId(item.id);
     }
   };
 
   const removeItem = (id: string) => {
     setAddedItems((prev) => prev.filter((i) => i.id !== id));
+    if (selectedItemId === id) setSelectedItemId(null);
   };
 
   const handleDownloadJar = () => {
@@ -573,8 +660,9 @@ export default function Index() {
             </div>
           )}
 
-          <div className="grid lg:grid-cols-3 gap-5">
-            {/* Settings */}
+          <div className="grid lg:grid-cols-4 gap-5">
+
+            {/* Col 1: Mod settings + item list */}
             <div className="space-y-4">
               <div className="bg-mc-surface/60 border border-mc-border rounded-2xl p-5">
                 <h3 className="text-sm font-bold text-mc-text mb-4 flex items-center gap-2">
@@ -584,7 +672,7 @@ export default function Index() {
                 <div className="space-y-3">
                   {(["name", "description", "version"] as const).map((key) => (
                     <div key={key}>
-                      <label className="text-xs text-mc-muted block mb-1 capitalize">
+                      <label className="text-xs text-mc-muted block mb-1">
                         {key === "name" ? "Название" : key === "description" ? "Описание" : "Версия"}
                       </label>
                       <input
@@ -595,39 +683,9 @@ export default function Index() {
                     </div>
                   ))}
                 </div>
-
-                <div className="mt-5">
-                  <h4 className="text-xs font-bold text-mc-muted mb-3 uppercase tracking-wider">Характеристики</h4>
-                  <div className="space-y-3">
-                    {([
-                      { label: "Урон", key: "damage" as const, min: 1, max: 20 },
-                      { label: "Прочность", key: "durability" as const, min: 50, max: 2000 },
-                    ]).map(({ label, key, min, max }) => (
-                      <div key={key}>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-mc-muted">{label}</span>
-                          <span className="text-mc-green-bright font-mono">{editorMod.properties[key]}</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={min}
-                          max={max}
-                          value={editorMod.properties[key]}
-                          onChange={(e) =>
-                            setEditorMod((prev) => ({
-                              ...prev,
-                              properties: { ...prev.properties, [key]: Number(e.target.value) },
-                            }))
-                          }
-                          className="w-full accent-green-500 h-1.5 rounded cursor-pointer"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
 
-              {/* Added items */}
+              {/* Added items list */}
               <div className="bg-mc-surface/60 border border-mc-border rounded-2xl p-5">
                 <h3 className="text-sm font-bold text-mc-text mb-3 flex items-center justify-between">
                   <span className="flex items-center gap-2">
@@ -639,91 +697,339 @@ export default function Index() {
                   </span>
                 </h3>
                 {addedItems.length === 0 ? (
-                  <p className="text-xs text-mc-muted italic text-center py-4">
-                    Добавь элементы из базы →
-                  </p>
+                  <p className="text-xs text-mc-muted italic text-center py-4">Добавь элементы из базы →</p>
                 ) : (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {addedItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between bg-mc-border/30 rounded-lg px-3 py-1.5 group">
-                        <span className="text-sm flex items-center gap-2">
-                          <span>{item.emoji}</span>
-                          <span className="text-mc-text">{item.name}</span>
-                        </span>
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          className="text-mc-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                  <div className="space-y-1 max-h-56 overflow-y-auto">
+                    {addedItems.map((item) => {
+                      const s = itemSettings[item.id];
+                      const isSelected = selectedItemId === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setSelectedItemId(item.id)}
+                          className={`flex items-center justify-between rounded-lg px-3 py-2 cursor-pointer group transition-all ${
+                            isSelected
+                              ? "bg-mc-amber/10 border border-mc-amber/40"
+                              : "bg-mc-border/30 hover:bg-mc-border/50 border border-transparent"
+                          }`}
                         >
-                          <Icon name="X" size={12} />
-                        </button>
-                      </div>
-                    ))}
+                          <span className="text-sm flex items-center gap-2 min-w-0">
+                            <span className="text-base flex-shrink-0" style={s?.color ? { filter: `drop-shadow(0 0 4px ${s.color})` } : {}}>
+                              {item.emoji}
+                            </span>
+                            <span className={`truncate text-xs ${isSelected ? "text-mc-amber" : "text-mc-text"}`}>
+                              {s?.customName || item.name}
+                            </span>
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removeItem(item.id); }}
+                            className="text-mc-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 ml-1"
+                          >
+                            <Icon name="X" size={11} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Database */}
-            <div className="lg:col-span-2 bg-mc-surface/60 border border-mc-border rounded-2xl p-5">
-              <h3 className="text-sm font-bold text-mc-text mb-4 flex items-center gap-2">
+            {/* Col 2-3: Item settings panel OR database */}
+            <div className="lg:col-span-2 space-y-4">
+              {selectedItem ? (
+                <div className="bg-mc-surface/60 border border-mc-amber/30 rounded-2xl p-5 animate-fade-in">
+                  {/* Header preview */}
+                  <div className="flex items-center gap-4 mb-5 pb-4 border-b border-mc-border">
+                    <div
+                      className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl border-2 transition-all"
+                      style={{
+                        borderColor: currentSettings.color,
+                        boxShadow: currentSettings.glowing ? `0 0 20px ${currentSettings.glowColor}88` : "none",
+                        background: `${currentSettings.color}15`,
+                      }}
+                    >
+                      {selectedItem.emoji}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-base font-bold ${RARITIES.find(r => r.id === currentSettings.rarity)?.color ?? "text-mc-text"}`}>
+                        {currentSettings.customName || selectedItem.name}
+                      </div>
+                      <div className="text-xs text-mc-muted mt-0.5">
+                        {MATERIAL_LABELS[currentSettings.material]} · {RARITIES.find(r => r.id === currentSettings.rarity)?.label}
+                        {currentSettings.glowing && " · ✨ Светится"}
+                        {currentSettings.fireproof && " · 🔥 Огнеупорный"}
+                      </div>
+                      {currentSettings.effects.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {currentSettings.effects.map(ef => (
+                            <span key={ef} className="text-[10px] bg-purple-500/20 border border-purple-500/30 text-purple-300 px-1.5 py-0.5 rounded-md">{ef}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setSelectedItemId(null)}
+                      className="text-mc-muted hover:text-mc-text transition-colors"
+                    >
+                      <Icon name="X" size={16} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Custom name */}
+                    <div className="col-span-2">
+                      <label className="text-xs text-mc-muted block mb-1">Название предмета</label>
+                      <input
+                        value={currentSettings.customName}
+                        onChange={(e) => updateSetting("customName", e.target.value)}
+                        placeholder={selectedItem.name}
+                        className="w-full bg-[hsl(220,20%,5%)] border border-mc-border rounded-lg px-3 py-2 text-sm text-mc-text focus:outline-none focus:border-mc-amber/60 transition-colors"
+                      />
+                    </div>
+
+                    {/* Color */}
+                    <div>
+                      <label className="text-xs text-mc-muted block mb-2">Цвет предмета</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={currentSettings.color}
+                          onChange={(e) => updateSetting("color", e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-mc-border cursor-pointer bg-transparent"
+                        />
+                        <input
+                          value={currentSettings.color}
+                          onChange={(e) => updateSetting("color", e.target.value)}
+                          className="flex-1 bg-[hsl(220,20%,5%)] border border-mc-border rounded-lg px-2 py-2 text-xs text-mc-text font-mono focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Glow color */}
+                    <div>
+                      <label className="text-xs text-mc-muted block mb-2">Цвет свечения</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={currentSettings.glowColor}
+                          onChange={(e) => updateSetting("glowColor", e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-mc-border cursor-pointer bg-transparent"
+                        />
+                        <input
+                          value={currentSettings.glowColor}
+                          onChange={(e) => updateSetting("glowColor", e.target.value)}
+                          className="flex-1 bg-[hsl(220,20%,5%)] border border-mc-border rounded-lg px-2 py-2 text-xs text-mc-text font-mono focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Texture */}
+                    <div className="col-span-2">
+                      <label className="text-xs text-mc-muted block mb-2">Текстура</label>
+                      <div className="grid grid-cols-6 gap-1.5">
+                        {TEXTURES.map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => updateSetting("texture", t.id)}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-xs transition-all ${
+                              currentSettings.texture === t.id
+                                ? "border-mc-amber/60 bg-mc-amber/10 text-mc-amber"
+                                : "border-mc-border hover:border-mc-border/80 text-mc-muted hover:text-mc-text"
+                            }`}
+                          >
+                            <span className="text-lg">{t.preview}</span>
+                            <span className="text-[10px] leading-none">{t.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Material */}
+                    <div>
+                      <label className="text-xs text-mc-muted block mb-2">Материал</label>
+                      <div className="grid grid-cols-2 gap-1">
+                        {MATERIALS.map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => updateSetting("material", m)}
+                            className={`text-xs py-1.5 px-2 rounded-lg border transition-all ${
+                              currentSettings.material === m
+                                ? "border-mc-green/60 bg-mc-green/10 text-mc-green-bright"
+                                : "border-mc-border text-mc-muted hover:border-mc-border/80 hover:text-mc-text"
+                            }`}
+                          >
+                            {MATERIAL_LABELS[m]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Rarity */}
+                    <div>
+                      <label className="text-xs text-mc-muted block mb-2">Редкость</label>
+                      <div className="space-y-1">
+                        {RARITIES.map((r) => (
+                          <button
+                            key={r.id}
+                            onClick={() => updateSetting("rarity", r.id)}
+                            className={`w-full text-xs py-1.5 px-2 rounded-lg border text-left transition-all flex items-center gap-2 ${
+                              currentSettings.rarity === r.id
+                                ? "border-mc-amber/50 bg-mc-amber/10"
+                                : "border-mc-border hover:border-mc-border/80"
+                            }`}
+                          >
+                            <span className={`font-semibold ${r.color}`}>{r.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="col-span-2">
+                      <label className="text-xs text-mc-muted block mb-2">Характеристики</label>
+                      <div className="space-y-2.5">
+                        {([
+                          { label: "Урон", key: "damage" as const, min: 1, max: 50, unit: "" },
+                          { label: "Прочность", key: "durability" as const, min: 50, max: 2000, unit: "" },
+                          { label: "Макс. стак", key: "maxStack" as const, min: 1, max: 64, unit: "" },
+                        ]).map(({ label, key, min, max }) => (
+                          <div key={key}>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-mc-muted">{label}</span>
+                              <span className="text-mc-green-bright font-mono">{currentSettings[key]}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={min}
+                              max={max}
+                              value={currentSettings[key] as number}
+                              onChange={(e) => updateSetting(key, Number(e.target.value))}
+                              className="w-full accent-green-500 h-1.5 rounded cursor-pointer"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Toggles */}
+                    <div className="col-span-2">
+                      <label className="text-xs text-mc-muted block mb-2">Флаги</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {([
+                          { key: "glowing" as const, label: "✨ Светится" },
+                          { key: "fireproof" as const, label: "🔥 Огнеупорный" },
+                          { key: "stackable" as const, label: "📦 Складируется" },
+                        ]).map(({ key, label }) => (
+                          <button
+                            key={key}
+                            onClick={() => updateSetting(key, !currentSettings[key])}
+                            className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium ${
+                              currentSettings[key]
+                                ? "border-mc-green/60 bg-mc-green/15 text-mc-green-bright"
+                                : "border-mc-border text-mc-muted hover:border-mc-border/80 hover:text-mc-text"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Effects */}
+                    <div className="col-span-2">
+                      <label className="text-xs text-mc-muted block mb-2">Эффекты при использовании</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {EFFECTS_LIST.map((ef) => (
+                          <button
+                            key={ef}
+                            onClick={() => toggleEffect(ef)}
+                            className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                              currentSettings.effects.includes(ef)
+                                ? "border-purple-500/60 bg-purple-500/15 text-purple-300"
+                                : "border-mc-border text-mc-muted hover:border-purple-500/30 hover:text-purple-400"
+                            }`}
+                          >
+                            {ef}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-mc-surface/60 border border-mc-border rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-48">
+                  <Icon name="MousePointerClick" size={28} className="text-mc-muted mb-3" />
+                  <p className="text-mc-muted text-sm">Выбери предмет из базы или из списка «В моде»</p>
+                  <p className="text-mc-muted/60 text-xs mt-1">чтобы настроить его параметры</p>
+                </div>
+              )}
+            </div>
+
+            {/* Col 4: Database */}
+            <div className="bg-mc-surface/60 border border-mc-border rounded-2xl p-4">
+              <h3 className="text-sm font-bold text-mc-text mb-3 flex items-center gap-2">
                 <Icon name="Database" size={14} className="text-mc-blue" />
-                База данных
+                База
               </h3>
 
-              <div className="flex gap-2 mb-4">
-                <div className="flex-1 relative">
-                  <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-mc-muted" />
-                  <input
-                    value={searchFilter}
-                    onChange={(e) => setSearchFilter(e.target.value)}
-                    placeholder="Поиск..."
-                    className="w-full bg-[hsl(220,20%,5%)] border border-mc-border rounded-lg pl-9 pr-3 py-2 text-sm text-mc-text placeholder-mc-muted/50 focus:outline-none focus:border-mc-blue/60 transition-colors"
-                  />
-                </div>
-                <div className="flex gap-1">
-                  {CATEGORIES.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setCategoryFilter(cat)}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                        categoryFilter === cat
-                          ? "bg-mc-blue/20 border border-mc-blue/50 text-mc-blue"
-                          : "text-mc-muted hover:text-mc-text border border-transparent"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
+              <div className="relative mb-3">
+                <Icon name="Search" size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mc-muted" />
+                <input
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Поиск..."
+                  className="w-full bg-[hsl(220,20%,5%)] border border-mc-border rounded-lg pl-8 pr-2 py-1.5 text-xs text-mc-text placeholder-mc-muted/50 focus:outline-none focus:border-mc-blue/60 transition-colors"
+                />
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[420px] overflow-y-auto pr-1">
+              <div className="flex flex-wrap gap-1 mb-3">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium transition-all ${
+                      categoryFilter === cat
+                        ? "bg-mc-blue/20 border border-mc-blue/50 text-mc-blue"
+                        : "text-mc-muted hover:text-mc-text border border-transparent"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 max-h-[520px] overflow-y-auto pr-0.5">
                 {filteredItems.map((item) => {
                   const isAdded = addedItems.some((a) => a.id === item.id);
+                  const isSelected = selectedItemId === item.id;
                   return (
                     <button
                       key={item.id}
                       onClick={() => addItemToMod(item)}
-                      disabled={isAdded}
-                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
-                        isAdded
-                          ? "border-mc-green/50 bg-mc-green/10 cursor-default"
+                      className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${
+                        isSelected
+                          ? "border-mc-amber/60 bg-mc-amber/10"
+                          : isAdded
+                          ? "border-mc-green/40 bg-mc-green/8 hover:border-mc-green/60"
                           : "border-mc-border hover:border-mc-blue/50 hover:bg-mc-blue/5 hover:scale-105"
                       }`}
                     >
-                      <span className="text-2xl">{item.emoji}</span>
-                      <span className="text-xs text-mc-muted text-center leading-tight">{item.name}</span>
-                      {isAdded && (
-                        <span className="text-[10px] text-mc-green-bright font-mono">✓ добавлен</span>
+                      <span className="text-xl">{item.emoji}</span>
+                      <span className="text-[10px] text-mc-muted text-center leading-tight">{item.name}</span>
+                      {isAdded && !isSelected && (
+                        <span className="text-[9px] text-mc-green-bright font-mono">✓</span>
+                      )}
+                      {isSelected && (
+                        <span className="text-[9px] text-mc-amber font-mono">⚙</span>
                       )}
                     </button>
                   );
                 })}
               </div>
 
-              <div className="mt-4 pt-4 border-t border-mc-border flex items-center justify-between text-xs text-mc-muted">
-                <span>Показано: {filteredItems.length} из {BLOCKS_DB.length}</span>
-                <span className="font-mono text-mc-green-bright/70">v1.20.1 · Forge</span>
+              <div className="mt-3 pt-3 border-t border-mc-border text-[10px] text-mc-muted text-center">
+                {filteredItems.length} из {BLOCKS_DB.length}
               </div>
             </div>
           </div>
